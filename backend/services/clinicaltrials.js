@@ -28,7 +28,16 @@ export async function fetchClinicalTrials(disease, query, maxResults = 50) {
     });
 
     const studies = data?.studies || [];
-    if (!studies.length) return [];
+    
+    // Fallback: If no results for combined query, search just for the disease
+    if (!studies.length && query) {
+      console.log(`⚠️  No trials for "${disease} + ${query}", falling back to "${disease}"`);
+      const fallbackRes = await axios.get(CT_BASE, {
+        params: { "query.cond": disease, pageSize: Math.floor(maxResults/2), format: "json" },
+        timeout: 10000
+      });
+      return (fallbackRes.data?.studies || []).map(normalizeTrial).filter(Boolean);
+    }
 
     return studies.map(normalizeTrial).filter(Boolean);
   } catch (err) {

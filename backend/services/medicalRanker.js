@@ -109,13 +109,12 @@ export function selectTopTrials(trials = [], disease, topK = 6) {
     .slice(0, topK);
 }
 
-// ── Trend Engine ──────────────────────────────
+// ── Trend Engine (v5 Professional) ───────────────────
 export function detectResearchTrends(papers, trials, query = '') {
   const corpus = [...papers, ...trials]
     .map(p => `${p.title || ''} ${p.abstract || p.description || ''}`.toLowerCase())
     .join(' ');
 
-  // 1. Frequent meaningful words from paper titles (query-specific)
   const stopWords = new Set(['the','and','for','with','from','that','this','were','have','been','their',
     'after','among','using','study','trial','patients','results','effect','effects','clinical',
     'treatment','disease','based','versus','compared','between','during','within','without',
@@ -128,40 +127,53 @@ export function detectResearchTrends(papers, trials, query = '') {
     'test','tests','analysis','review','meta','systematic','randomized','controlled','cohort',
     'observational','prospective','retrospective','double','blind','placebo','vs','et','al']);
 
-  const titleWordCounts = papers
-    .flatMap(p => (p.title || '').toLowerCase().split(/[\s\-\/,;:()]+/))
-    .filter(w => w.length > 5 && !stopWords.has(w) && /^[a-z]/.test(w))
-    .reduce((acc, w) => { acc[w] = (acc[w] || 0) + 1; return acc; }, {});
+  // 1. Bi-gram extraction for professional labels
+  const getBigrams = (text) => {
+    const words = text.toLowerCase().split(/[\s\-\/,;:()]+/).filter(w => w.length > 3 && !stopWords.has(w));
+    const bigrams = [];
+    for (let i = 0; i < words.length - 1; i++) {
+      bigrams.push(`${words[i]} ${words[i+1]}`);
+    }
+    return bigrams;
+  };
 
-  const titleSignals = Object.entries(titleWordCounts)
+  const bigramCounts = papers.flatMap(p => getBigrams(p.title || '')).reduce((acc, b) => {
+    acc[b] = (acc[b] || 0) + 1;
+    return acc;
+  }, {});
+
+  const bigramSignals = Object.entries(bigramCounts)
     .filter(([, c]) => c >= 2)
-    .map(([w, c]) => ({ trend: w, score: c * 2, fromTitle: true }));
+    .map(([b, c]) => ({ trend: b.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), score: c * 4, fromTitle: true }));
 
-  // 2. Known medical signals scored against corpus
+  // 2. Known medical signals (Expanded Oncology + Immunology)
   const medicalSignals = [
-    'semaglutide','tirzepatide','empagliflozin','dapagliflozin','metformin','insulin','liraglutide','glp-1','sglt2',
-    'pembrolizumab','nivolumab','cemiplimab','osimertinib','trastuzumab','palbociclib','olaparib',
-    'lecanemab','donanemab','bedaquiline','paxlovid','remdesivir','baricitinib','car-t','mrna',
-    'immunotherapy','biomarker','precision medicine','gene therapy','liquid biopsy','targeted therapy',
-    'pd-l1','pd-1','egfr','kras','her2','brca','tp53','alk','hba1c','glycemic','insulin resistance',
-    'beta cell','glucagon','inflammation','cytokine','microbiome','epigenetic','genomics',
-    'neuroprotection','neuroplasticity','amyloid','tau','dopamine','serotonin','alpha-synuclein',
-    'phase 3','phase 2','meta-analysis','artificial intelligence','machine learning','digital health',
-    'stem cell','crispr','telemedicine','wearable'
+    'semaglutide','tirzepatide','pembrolizumab','nivolumab','cemiplimab','osimertinib','trastuzumab','palbociclib','olaparib',
+    'car-t','mrna','immunotherapy','biomarker','precision medicine','liquid biopsy','targeted therapy',
+    'pd-l1','pd-1','egfr','kras','her2','brca','tp53','alk','resistance mechanism','combination therapy','adjuvant therapy'
   ];
 
   const signalScores = medicalSignals
-    .map(sig => ({ trend: sig, score: corpus.split(sig).length - 1 }))
+    .map(sig => ({ 
+      trend: sig.charAt(0).toUpperCase() + sig.slice(1), 
+      score: (corpus.split(sig).length - 1) * 2 
+    }))
     .filter(t => t.score > 0);
 
-  // 3. Merge + deduplicate (remove substrings of already-seen trends)
-  const all = [...titleSignals, ...signalScores].sort((a, b) => b.score - a.score);
+  // 3. Merge + Smart Deduplication
+  const all = [...bigramSignals, ...signalScores].sort((a, b) => b.score - a.score);
   const seen = new Set();
-  return all.filter(({ trend }) => {
-    if ([...seen].some(s => s.includes(trend) || trend.includes(s))) return false;
-    seen.add(trend);
-    return true;
-  }).slice(0, 8);
+  const final = [];
+  
+  for (const item of all) {
+    const norm = item.trend.toLowerCase();
+    if ([...seen].some(s => s.includes(norm) || norm.includes(s))) continue;
+    if (final.length >= 8) break;
+    final.push(item);
+    seen.add(norm);
+  }
+  
+  return final;
 }
 
 // ── Hallucination Gate ────────────────────────

@@ -95,8 +95,21 @@ export function detectIntent(q = '') {
 }
 
 // =========================
-// 5b. KEYWORD EXTRACTION
-// =========================
+// 5c. SEARCH SANITIZER (CRITICAL FOR API SUCCESS)
+export function sanitizeForSearch(query = '', disease = '') {
+  const q = query.toLowerCase();
+  // Remove noise words that fail PubMed/OpenAlex
+  const noise = ['latest', 'results', 'finding', 'recent', 'global', 'updates', 'current', 'news', 'paper', 'article', 'study', 'research'];
+  let clean = q;
+  noise.forEach(w => {
+    clean = clean.replace(new RegExp(`\\b${w}\\b`, 'g'), '');
+  });
+  
+  // Extract key medical terms
+  const keywords = clean.split(/\s+/).filter(w => w.length > 3).slice(0, 5);
+  return keywords.length > 0 ? keywords.join(' ') : disease;
+}
+
 export function extractKeywords(query = '', disease = '', intent = '') {
   const base = `${query} ${disease} ${intent}`.toLowerCase();
   const stopWords = new Set(['with', 'from', 'that', 'this', 'have', 'what', 'does', 'into', 'your', 'about', 'more', 'also']);
@@ -218,12 +231,14 @@ export function expandQuery({ disease, query }) {
 }
 
 export function generateQueries(disease, query, intent) {
-  const expanded = expandQuery({ disease, query });
+  const sanitized = sanitizeForSearch(query, disease);
+  const expanded = expandQuery({ disease, query: sanitized });
+  
   return [
-    { pubmed: expanded, openalex: expanded },
-    { pubmed: `${disease} ${query} clinical trial`, openalex: `${disease} ${query} clinical trial` },
-    { pubmed: `${disease} randomized study ${intent}`, openalex: `${disease} randomized study ${intent}` },
-    { pubmed: `${disease} meta analysis`, openalex: `${disease} meta analysis` }
+    { pubmed: `${disease} AND ${sanitized}`, openalex: `${disease} ${sanitized}` },
+    { pubmed: `${disease} AND (treatment OR therapy OR drug)`, openalex: `${disease} treatment outcomes` },
+    { pubmed: `${disease} AND (clinical trial OR randomized OR rct)`, openalex: `${disease} clinical trials` },
+    { pubmed: `${disease} AND newer`, openalex: `${disease} trends 2024` }
   ];
 }
 
