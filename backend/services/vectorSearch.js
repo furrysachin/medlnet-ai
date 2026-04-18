@@ -4,17 +4,7 @@
 let pipeline = null;
 
 async function getEmbedder() {
-  if (!pipeline) {
-    try {
-      const { pipeline: createPipeline } = await import('@xenova/transformers');
-      pipeline = await createPipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-      console.log('✅ Embedder loaded: all-MiniLM-L6-v2');
-    } catch (err) {
-      console.warn('⚠️  Embedder unavailable:', err.message);
-      pipeline = null;
-    }
-  }
-  return pipeline;
+  return null; // Pure keyword ranking for cloud stability
 }
 
 // ── Cosine Similarity ─────────────────────────────────────────────
