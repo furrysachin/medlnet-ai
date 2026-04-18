@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000' });
+const api = axios.create({ 
+  baseURL: import.meta.env.VITE_API_URL || 'https://curalink-backend.onrender.com' 
+});
 
 export const sendMessage = (payload) => api.post('/api/chat/message', payload);
 export const getHistory = (sessionId) => api.get(`/api/chat/history/${sessionId}`);
