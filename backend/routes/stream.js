@@ -9,11 +9,12 @@ import { safetyAgent } from '../agents/safetyAgent.js';
 import { calculateConfidence } from '../utils/confidence.js';
 import { getEmbedding } from '../services/embedder.js';
 import { addToVectorStore } from '../services/vectorStore.js';
+import { HfInference } from '@huggingface/inference';
 
 export const streamRoute = express.Router();
 
-const OLLAMA_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-const MODEL = process.env.OLLAMA_MODEL || 'gemma2:2b';
+const hf = new HfInference(process.env.HF_API_KEY);
+const MODEL = process.env.HF_MODEL || "mistralai/Mistral-7B-Instruct-v0.3";
 
 function send(res, type, data) {
   res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
@@ -73,46 +74,34 @@ streamRoute.post('/stream', async (req, res) => {
 
     send(res, 'status', { msg: '🤖 Generating clinical analysis...' });
 
-    // Stream LLM response
+    // Stream LLM response via Hugging Face
     const prompt = doctorAgent({ query, disease, papers, trials: topTrials });
-
-    const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
-      model: MODEL,
-      prompt,
-      stream: true,
-      options: { temperature: 0.1, num_predict: 600 }
-    }, { responseType: 'stream', timeout: 120000 });
-
     let fullText = '';
 
-    response.data.on('data', chunk => {
-      try {
-        const lines = chunk.toString().split('\n').filter(Boolean);
-        for (const line of lines) {
-          const json = JSON.parse(line);
-          if (json.response) {
-            fullText += json.response;
-            send(res, 'delta', { text: json.response });
-          }
-          if (json.done) {
-            const safety = safetyAgent(fullText, papers);
-            send(res, 'done', {
-              safety: safety.safe,
-              flags: safety.flags,
-              papers,
-              trials: topTrials,
-              confidence
-            });
-            res.end();
-          }
-        }
-      } catch { /* partial chunk */ }
+    const stream = hf.chatCompletionStream({
+      model: MODEL,
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 1000,
+      temperature: 0.2,
     });
 
-    response.data.on('error', () => {
-      send(res, 'done', { error: 'Stream error' });
-      res.end();
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content || "";
+      if (delta) {
+        fullText += delta;
+        send(res, 'delta', { text: delta });
+      }
+    }
+
+    const safety = safetyAgent(fullText, papers);
+    send(res, 'done', {
+      safety: safety.safe,
+      flags: safety.flags,
+      papers,
+      trials: topTrials,
+      confidence
     });
+    res.end();
 
   } catch (err) {
     send(res, 'error', { msg: err.message });
