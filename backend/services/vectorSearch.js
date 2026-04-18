@@ -21,7 +21,7 @@ async function getEmbedder() {
 function cosineSim(a, b) {
   let dot = 0, normA = 0, normB = 0;
   for (let i = 0; i < a.length; i++) {
-    dot   += a[i] * b[i];
+    dot += a[i] * b[i];
     normA += a[i] * a[i];
     normB += b[i] * b[i];
   }
@@ -79,12 +79,12 @@ export async function hybridRerank(papers, query, disease, topN = 8) {
     // Medical signal boosts
     const t = text.toLowerCase();
     let medical = 0;
-    if (/randomized|rct/.test(t))              medical += 0.3;
+    if (/randomized|rct/.test(t)) medical += 0.3;
     if (/meta-analysis|systematic review/.test(t)) medical += 0.25;
-    if (/clinical trial/.test(t))              medical += 0.2;
-    if (parseInt(p.year) >= 2022)              medical += 0.15;
-    if (p.source === 'PubMed')                 medical += 0.1;
-    if (/animal|in vitro|mouse/.test(t))       medical -= 0.2;
+    if (/clinical trial/.test(t)) medical += 0.2;
+    if (parseInt(p.year) >= 2022) medical += 0.15;
+    if (p.source === 'PubMed') medical += 0.1;
+    if (/animal|in vitro|mouse/.test(t)) medical -= 0.2;
 
     // Recency score (0–1 normalized)
     const year = parseInt(p.year) || 2000;
@@ -104,7 +104,7 @@ export async function hybridRerank(papers, query, disease, topN = 8) {
   const seen = new Set();
   return scored
     .filter(p => {
-      const key = (p.title||'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,50);
+      const key = (p.title || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 50);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;

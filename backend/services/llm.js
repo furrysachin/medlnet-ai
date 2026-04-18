@@ -3,40 +3,40 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const OLLAMA_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-const MODEL      = process.env.OLLAMA_MODEL     || 'llama3:8b';
+const MODEL = process.env.OLLAMA_MODEL || 'llama3:8b';
 
 const DISEASE_DRUGS = {
-  covid:          'paxlovid, remdesivir, molnupiravir, dexamethasone',
-  diabetes:       'metformin, semaglutide, empagliflozin, insulin, tirzepatide',
-  'lung cancer':  'pembrolizumab, nivolumab, osimertinib, atezolizumab',
-  'breast cancer':'trastuzumab, pertuzumab, palbociclib, olaparib',
-  alzheimer:      'donepezil, memantine, lecanemab, donanemab',
-  tuberculosis:   'rifampicin, isoniazid, bedaquiline, pretomanid',
-  'heart disease':'statins, aspirin, beta-blockers, sacubitril',
-  hypertension:   'amlodipine, losartan, ACE inhibitors',
-  cancer:         'pembrolizumab, nivolumab, CAR-T, immunotherapy, targeted therapy'
+  covid: 'paxlovid, remdesivir, molnupiravir, dexamethasone',
+  diabetes: 'metformin, semaglutide, empagliflozin, insulin, tirzepatide',
+  'lung cancer': 'pembrolizumab, nivolumab, osimertinib, atezolizumab',
+  'breast cancer': 'trastuzumab, pertuzumab, palbociclib, olaparib',
+  alzheimer: 'donepezil, memantine, lecanemab, donanemab',
+  tuberculosis: 'rifampicin, isoniazid, bedaquiline, pretomanid',
+  'heart disease': 'statins, aspirin, beta-blockers, sacubitril',
+  hypertension: 'amlodipine, losartan, ACE inhibitors',
+  cancer: 'pembrolizumab, nivolumab, CAR-T, immunotherapy, targeted therapy'
 };
 
-const getDrugs = d => !d ? '' : (Object.entries(DISEASE_DRUGS).find(([k]) => (d||'').toLowerCase().includes(k))?.[1] || '');
+const getDrugs = d => !d ? '' : (Object.entries(DISEASE_DRUGS).find(([k]) => (d || '').toLowerCase().includes(k))?.[1] || '');
 
 // ── Drug Extraction from Abstracts ───────────────────────────────
 const KNOWN_DRUGS = [
-  'pembrolizumab','nivolumab','cemiplimab','atezolizumab','durvalumab',
-  'osimertinib','erlotinib','gefitinib','afatinib','dacomitinib',
-  'semaglutide','tirzepatide','empagliflozin','dapagliflozin','metformin',
-  'trastuzumab','pertuzumab','palbociclib','ribociclib','olaparib',
-  'lecanemab','donanemab','aducanumab','donepezil','memantine',
-  'bedaquiline','pretomanid','linezolid','rifampicin','isoniazid',
-  'paxlovid','remdesivir','molnupiravir','dexamethasone','baricitinib',
-  'sacubitril','valsartan','entresto','amlodipine','losartan',
-  'car-t','car t','mrna','bnt162b2','mrna-1273',
-  'imatinib','dasatinib','ibrutinib','venetoclax','bortezomib'
+  'pembrolizumab', 'nivolumab', 'cemiplimab', 'atezolizumab', 'durvalumab',
+  'osimertinib', 'erlotinib', 'gefitinib', 'afatinib', 'dacomitinib',
+  'semaglutide', 'tirzepatide', 'empagliflozin', 'dapagliflozin', 'metformin',
+  'trastuzumab', 'pertuzumab', 'palbociclib', 'ribociclib', 'olaparib',
+  'lecanemab', 'donanemab', 'aducanumab', 'donepezil', 'memantine',
+  'bedaquiline', 'pretomanid', 'linezolid', 'rifampicin', 'isoniazid',
+  'paxlovid', 'remdesivir', 'molnupiravir', 'dexamethasone', 'baricitinib',
+  'sacubitril', 'valsartan', 'entresto', 'amlodipine', 'losartan',
+  'car-t', 'car t', 'mrna', 'bnt162b2', 'mrna-1273',
+  'imatinib', 'dasatinib', 'ibrutinib', 'venetoclax', 'bortezomib'
 ];
 
 const KNOWN_MUTATIONS = [
-  'egfr','kras','alk','ros1','braf','her2','erbb2','pd-l1','pd-1',
-  'brca1','brca2','tp53','pik3ca','met','ret','ntrk','fgfr',
-  'idh1','idh2','flt3','npm1','jak2','bcr-abl','msi-h','tmb-h'
+  'egfr', 'kras', 'alk', 'ros1', 'braf', 'her2', 'erbb2', 'pd-l1', 'pd-1',
+  'brca1', 'brca2', 'tp53', 'pik3ca', 'met', 'ret', 'ntrk', 'fgfr',
+  'idh1', 'idh2', 'flt3', 'npm1', 'jak2', 'bcr-abl', 'msi-h', 'tmb-h'
 ];
 
 export function extractDrugsFromPapers(papers = []) {
@@ -57,7 +57,7 @@ export function tagRecency(papers = []) {
   return papers.map(p => ({
     ...p,
     recencyTag: parseInt(p.year) >= 2026 ? 'Recent 2026 Data' :
-                parseInt(p.year) >= 2025 ? 'Recent 2025 Data' : null
+      parseInt(p.year) >= 2025 ? 'Recent 2025 Data' : null
   }));
 }
 
@@ -154,13 +154,13 @@ Think like a clinical researcher, not an assistant.`;
 export function buildLLMPrompt(nameOrObj, disease, query, location = '', papers = [], trials = [], history = []) {
   let name, counts, analyzedTrials;
   if (typeof nameOrObj === 'object') {
-    ({ name, disease, query, location = '', papers = [], trials = [], history = [], counts = null, analyzedTrials = null } = nameOrObj);
+    ({ name, disease, query, location = '', papers =[], trials =[], history =[], counts = null, analyzedTrials = null } = nameOrObj);
   } else {
     name = nameOrObj;
   }
 
   const drugs = getDrugs(disease);
-  const ctx = history.slice(-2).map(m => `${m.role}: ${String(m.content||'').slice(0,80)}`).join('\n') || 'None';
+  const ctx = history.slice(-2).map(m => `${m.role}: ${String(m.content || '').slice(0, 80)}`).join('\n') || 'None';
   const hasTrials = trials.length > 0;
 
   const taggedPapers = tagRecency(papers);
@@ -168,11 +168,11 @@ export function buildLLMPrompt(nameOrObj, disease, query, location = '', papers 
   const detectedMutations = extractMutationsFromPapers(papers);
 
   const papersText = taggedPapers.slice(0, 5).map((p, i) =>
-    `[${i+1}] ${p.title} (${p.year}, ${p.source})${p.recencyTag ? ` [${p.recencyTag}]` : ''}`
+    `[${i + 1}] ${p.title} (${p.year}, ${p.source})${p.recencyTag ? ` [${p.recencyTag}]` : ''}`
   ).join('\n') || 'No papers found';
 
   const trialsText = hasTrials
-    ? trials.slice(0, 4).map((t, i) => `[${i+1}] ${t.title} | ${t.status} | ${t.phase}`).join('\n')
+    ? trials.slice(0, 4).map((t, i) => `[${i + 1}] ${t.title} | ${t.status} | ${t.phase}`).join('\n')
     : 'No trials in dataset';
 
   return [
@@ -216,13 +216,13 @@ export function buildLLMPrompt(nameOrObj, disease, query, location = '', papers 
 // ── Structured Insights Prompt ────────────────────────────────────
 export function buildInsightsPrompt(disease, query, papers = [], trials = [], intent = 'general') {
   if (typeof disease === 'object') {
-    ({ disease, query, papers = [], trials = [], intent = 'general' } = disease);
+    ({ disease, query, papers =[], trials =[], intent = 'general' } = disease);
   }
 
   const drugs = getDrugs(disease);
   const hasTrials = trials.length > 0;
-  const hasIndian = papers.some(p => p._isIndian || (p.country||'').includes('India')) ||
-                    trials.some(t => (t.locations||[]).some(l => (l.country||'').toLowerCase().includes('india')));
+  const hasIndian = papers.some(p => p._isIndian || (p.country || '').includes('India')) ||
+    trials.some(t => (t.locations || []).some(l => (l.country || '').toLowerCase().includes('india')));
 
   // Unified refs: papers [1..n], trials [n+1..]
   const trialsWithRef = trials.map((t, i) => ({ ...t, ref: papers.length + i + 1 }));
@@ -232,34 +232,34 @@ export function buildInsightsPrompt(disease, query, papers = [], trials = [], in
   const detectedMutations = extractMutationsFromPapers(papers);
 
   const papersText = taggedPapers.map((p, i) => [
-    `[${i+1}] "${p.title}" by ${p.authors||'N/A'} (${p.year}, ${p.source})${p.recencyTag ? ` [${p.recencyTag}]` : ''}`,
-    `Abstract: ${(p.abstract||'').slice(0,250)}`,
-    `URL: ${p.url||'N/A'}`
+    `[${i + 1}] "${p.title}" by ${p.authors || 'N/A'} (${p.year}, ${p.source})${p.recencyTag ? ` [${p.recencyTag}]` : ''}`,
+    `Abstract: ${(p.abstract || '').slice(0, 250)}`,
+    `URL: ${p.url || 'N/A'}`
   ].join('\n')).join('\n\n') || 'No publications retrieved.';
 
   const trialsText = hasTrials
     ? trialsWithRef.map(t => {
-        const locs = (t.locations||[]).map(l => `${l.city||''} ${l.country||''}`.trim()).filter(Boolean);
-        const isIndia = locs.some(l => l.toLowerCase().includes('india'));
-        const isAsia  = !isIndia && locs.some(l => /china|japan|korea|asia|singapore/.test(l.toLowerCase()));
-        const region  = isIndia ? 'India' : isAsia ? 'Asia' : 'Global';
-        const locStr  = locs.slice(0,2).join(', ') || 'N/A';
-        return [
-          `[${t.ref}] "${t.title}"`,
-          `Status: ${t.status} | Phase: ${t.phase} | Region: ${region} (${locStr})`,
-          `Summary: ${(t.description||'').slice(0,200)}`
-        ].join('\n');
-      }).join('\n\n')
+      const locs = (t.locations || []).map(l => `${l.city || ''} ${l.country || ''}`.trim()).filter(Boolean);
+      const isIndia = locs.some(l => l.toLowerCase().includes('india'));
+      const isAsia = !isIndia && locs.some(l => /china|japan|korea|asia|singapore/.test(l.toLowerCase()));
+      const region = isIndia ? 'India' : isAsia ? 'Asia' : 'Global';
+      const locStr = locs.slice(0, 2).join(', ') || 'N/A';
+      return [
+        `[${t.ref}] "${t.title}"`,
+        `Status: ${t.status} | Phase: ${t.phase} | Region: ${region} (${locStr})`,
+        `Summary: ${(t.description || '').slice(0, 200)}`
+      ].join('\n');
+    }).join('\n\n')
     : 'No clinical trials in dataset.';
 
   const intentFocus = {
-    treatment:  'Focus on specific drug names, clinical response rates, survival benefit, biomarkers (PD-L1, HER2, EGFR). Connect evidence to treatment implication.',
+    treatment: 'Focus on specific drug names, clinical response rates, survival benefit, biomarkers (PD-L1, HER2, EGFR). Connect evidence to treatment implication.',
     supplement: 'Focus on supplement efficacy, deficiency links, dosage evidence.',
-    symptom:    'Focus on symptoms, biological causes, inflammation, cytokines.',
-    cause:      'Focus on etiology, risk factors, pathogenesis, genetic causes.',
+    symptom: 'Focus on symptoms, biological causes, inflammation, cytokines.',
+    cause: 'Focus on etiology, risk factors, pathogenesis, genetic causes.',
     prevention: 'Focus on prevention strategies, vaccines, risk reduction.',
-    diagnosis:  'Focus on diagnostic methods, biomarkers, screening tools.',
-    general:    'Focus on strongest clinical evidence and most effective treatments.'
+    diagnosis: 'Focus on diagnostic methods, biomarkers, screening tools.',
+    general: 'Focus on strongest clinical evidence and most effective treatments.'
   }[intent] || 'Focus on the most clinically relevant findings.';
 
   const fallbackCritical = hasIndian
@@ -268,17 +268,17 @@ export function buildInsightsPrompt(disease, query, papers = [], trials = [], in
 
   const trialsSection = hasTrials
     ? [
-        'List 2-3 trials from above. India first, then Asia, then Global.',
-        'For each trial use EXACTLY this format:',
-        'Trial Name (Region)',
-        'Location: [city, country]',
-        'Status: [status] | Phase: [phase]',
-        'Objective: [1 line purpose]',
-        'Intervention: [drug or method]',
-        'Outcome: [if available, else Pending]',
-        '',
-        'If no India trials: "Limited India-specific trials; showing global evidence".'
-      ].join('\n')
+      'List 2-3 trials from above. India first, then Asia, then Global.',
+      'For each trial use EXACTLY this format:',
+      'Trial Name (Region)',
+      'Location: [city, country]',
+      'Status: [status] | Phase: [phase]',
+      'Objective: [1 line purpose]',
+      'Intervention: [drug or method]',
+      'Outcome: [if available, else Pending]',
+      '',
+      'If no India trials: "Limited India-specific trials; showing global evidence".'
+    ].join('\n')
     : 'No clinical trials found in retrieved dataset for this condition.';
 
   return [
@@ -298,7 +298,7 @@ export function buildInsightsPrompt(disease, query, papers = [], trials = [], in
     `PAPERS (cite as [1],[2],[3] — only cite numbers that exist):`,
     papersText,
     '',
-    `CLINICAL TRIALS (cite as [${papers.length+1}],[${papers.length+2}] etc.):`,
+    `CLINICAL TRIALS (cite as [${papers.length + 1}],[${papers.length + 2}] etc.):`,
     trialsText,
     '',
     '-------------------------------------',
@@ -345,22 +345,22 @@ export function buildTrendPrompt(disease, papers = [], trials = []) {
   const detectedMutations = extractMutationsFromPapers(papers);
 
   const papersText = taggedPapers.slice(0, 8).map((p, i) =>
-    `[${i+1}] "${p.title}" (${p.year}, ${p.source})${p.recencyTag ? ` [${p.recencyTag}]` : ''}\n    Abstract: ${(p.abstract||'').slice(0, 200)}`
+    `[${i + 1}] "${p.title}" (${p.year}, ${p.source})${p.recencyTag ? ` [${p.recencyTag}]` : ''}\n    Abstract: ${(p.abstract || '').slice(0, 200)}`
   ).join('\n\n') || 'No papers found.';
 
   const trialsText = trials.length
     ? trials.slice(0, 6).map((t, i) => [
-        `[T${i+1}] ${t.title}`,
-        `Status: ${t.status} | Phase: ${t.phase || 'N/A'}`,
-        `Summary: ${(t.description||'').slice(0, 150)}`
-      ].join('\n')).join('\n\n')
+      `[T${i + 1}] ${t.title}`,
+      `Status: ${t.status} | Phase: ${t.phase || 'N/A'}`,
+      `Summary: ${(t.description || '').slice(0, 150)}`
+    ].join('\n')).join('\n\n')
     : 'No clinical trials found in dataset.';
 
   return [
     MASTER_SYSTEM,
     '',
     `DISEASE: ${disease}`,
-    detectedDrugs.length     ? `DRUGS IN DATA: ${detectedDrugs.join(', ')}` : '',
+    detectedDrugs.length ? `DRUGS IN DATA: ${detectedDrugs.join(', ')}` : '',
     detectedMutations.length ? `MUTATIONS IN DATA: ${detectedMutations.join(', ')}` : '',
     '',
     'RESEARCH PAPERS:',
