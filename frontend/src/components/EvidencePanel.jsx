@@ -115,10 +115,18 @@ function TrendsView({ trends, insights }) {
             const score = sigs[t] || 1;
             const max = Math.max(...top.map(k => sigs[k] || 1), 1);
             const pct = Math.round((score / max) * 100);
+            const trendData = (trends?.detectedTrends || []).find(s => s.trend.toLowerCase() === t.toLowerCase());
             return (
               <div key={i}>
                 <div className="flex justify-between mb-1">
-                  <span className="text-xs text-gray-600 capitalize">{t}</span>
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <span className="text-xs text-gray-600 capitalize truncate">{t}</span>
+                    {trendData?.url && (
+                      <a href={trendData.url} target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-blue-500 transition-colors">
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
+                  </div>
                   <span className="text-xs text-gray-400">{score}</span>
                 </div>
                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -159,7 +167,14 @@ function ResearchersView({ papers }) {
               {r.name.charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-gray-900 truncate">{r.name}</p>
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-xs font-medium text-gray-900 truncate">{r.name}</p>
+                {r.url && (
+                  <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-blue-500 transition-colors">
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+              </div>
               <p className="text-xs text-gray-400 truncate">{r.paper?.slice(0, 40)}…</p>
             </div>
             <span className="text-xs text-gray-300 shrink-0">{r.year}</span>

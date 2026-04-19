@@ -13,8 +13,8 @@ function safeParseJSON(text, fallback) {
 
 // ── Single-pass chain (replaces 4 sequential LLM calls) ─────────
 export async function runPromptChain(query, disease, location, papers, trials, intent) {
-  const papersText = papers.slice(0, 6).map((p, i) =>
-    `[${i+1}] "${p.title}" (${p.year}, ${p.source}) - ${(p.abstract||'').slice(0,180)}`
+  const papersText = papers.slice(0, 10).map((p, i) =>
+    `[${i+1}] "${p.title}" (${p.year}, ${p.source}) - ${(p.abstract||'').slice(0,250)}`
   ).join('\n\n') || 'No papers.';
 
   const trialsText = trials.slice(0, 4).map((t, i) => {
@@ -43,28 +43,22 @@ export async function runPromptChain(query, disease, location, papers, trials, i
     'TRIALS:',
     trialsText,
     '',
-    'Generate output in EXACTLY this structure:',
+    'Generate output in this EXACT structure:',
+    '',
+    'GAPS:',
+    '[URGENT: 1-2 SPECIFIC research gaps or limitations found in THESE papers. Mention specific drugs or populations.]',
     '',
     'SUMMARY:',
     '[1-2 line clinical overview]',
     '',
     'KEY_INSIGHTS:',
-    '- [specific drug/outcome/finding from papers, max 5 bullets]',
-    '',
-    'CONDITION_OVERVIEW:',
-    '[2 lines from evidence]',
+    '- [specific findings from papers, max 3 bullets]',
     '',
     'EVIDENCE_SYNTHESIS:',
     '[2-3 lines: pharmacological + emerging therapies]',
     '',
-    'TRIALS_CONNECTION:',
-    '[1-2 trial blocks: Name, Status, Phase, Objective]',
-    '',
-    'RESEARCH_TRENDS:',
-    '- [3 trends from data]',
-    '',
-    'CRITICAL_INSIGHT:',
-    '[1-2 lines: gaps and limitations]'
+    'TRIALS:',
+    '[1-2 key trials from data]'
   ].join('\n');
 
   const finalOutput = await generateWithOllama(prompt);

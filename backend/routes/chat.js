@@ -2,9 +2,11 @@ import express from 'express';
 import { fetchPubMedPapers } from '../services/pubmed.js';
 import { fetchOpenAlexPapers } from '../services/openalex.js';
 import { fetchClinicalTrials } from '../services/clinicaltrials.js';
+import { fetchSemanticScholarPapers } from '../services/semanticScholar.js';
 import {
   generateWithOllama, buildLLMPrompt, buildInsightsPrompt,
-  buildDirectPrompt, isMedicalQuery, validateOutput
+  buildDirectPrompt, isMedicalQuery, validateOutput,
+  detectDiseaseFromQuery
 } from '../services/llm.js';
 import {
   parseInput, detectIntent, buildQuery, buildContext,
@@ -30,14 +32,22 @@ chatRoute.post('/message', async (req, res) => {
 
     const session = getSession(sessionId);
     const history = session.messages || [];
-    const effectiveDisease = disease || session.currentDisease || query;
+    
+    // Dynamic disease detection: prioritize query-detected disease > explicit disease > session context
+    const detected = detectDiseaseFromQuery(query);
+    const effectiveDisease = detected || disease || session.currentDisease || query;
+    
+    // Topic switch safety: if the disease changed, clear history to avoid cross-contamination
+    const isTopicSwitch = detected && session.currentDisease && detected.toLowerCase() !== session.currentDisease.toLowerCase();
+    const finalHistory = isTopicSwitch ? [] : history;
 
     // 1. Non-medical fast path
     if (!isMedicalQuery(query)) {
       const response = await generateWithOllama(buildDirectPrompt(query, effectiveDisease));
       saveSession(sessionId, {
         ...session,
-        messages: [...history, { role: 'user', content: query }, { role: 'assistant', content: response }].slice(-20)
+        messages: [...finalHistory, { role: 'user', content: query }, { role: 'assistant', content: response }].slice(-20),
+        currentDisease: effectiveDisease
       });
       return res.json({
         response, papers: [], trials: [], insights: null, expandedQuery: '',
@@ -49,27 +59,25 @@ chatRoute.post('/message', async (req, res) => {
 
     // 2. Intent + query expansion
     const intent = detectIntent(query);
-    const contextQuery = buildContext(history, query, effectiveDisease);
+    const contextQuery = buildContext(finalHistory, query, effectiveDisease);
     const expanded = expandQuery({ disease: effectiveDisease, query: contextQuery });
     const queryObj = buildQuery(effectiveDisease, contextQuery, intent);
     const queries = generateQueries(effectiveDisease, contextQuery, intent);
     const sanitizedQuery = sanitizeForSearch(contextQuery, effectiveDisease);
 
     // 3. Parallel fetch — increase volume to ensure 85+ confidence
-    const q1 = queries[0];
-    const q2 = queries[1];
-    const q3 = queries[2];
-    
-    const [pubmed1, openalex1, pubmed2, openalex2, pubmed3, rawTrials] = await Promise.all([
-      fetchPubMedPapers(q1.pubmed, 80),
-      fetchOpenAlexPapers(q1.openalex, 80),
-      fetchPubMedPapers(q2.pubmed, 40),
-      fetchOpenAlexPapers(q2.openalex, 40),
-      fetchPubMedPapers(q3.pubmed, 40),
-      fetchClinicalTrials(effectiveDisease, sanitizedQuery, 80) // Use sanitized query
+    // 4. Parallel research gathering (PubMed + OpenAlex + Semantic Scholar + Trials + Gaps Search)
+    const [pubmed1, openalex1, ss1, pubmed2, openalex2, ss2, rawTrials] = await Promise.all([
+      fetchPubMedPapers(queries[0].pubmed, 75),
+      fetchOpenAlexPapers(queries[0].openalex, 75),
+      fetchSemanticScholarPapers(queries[0].openalex, 75),
+      fetchPubMedPapers(queries[1].pubmed, 50),
+      fetchOpenAlexPapers(queries[1].openalex, 50),
+      fetchSemanticScholarPapers(`${effectiveDisease} limitations research gaps future directions`, 40),
+      fetchClinicalTrials(effectiveDisease, query, 65)
     ]);
 
-    const allPapers = deduplicate([...pubmed1, ...pubmed2, ...pubmed3, ...openalex1, ...openalex2]);
+    const allPapers = deduplicate([...pubmed1, ...pubmed2, ...openalex1, ...openalex2, ...ss1, ...ss2]);
 
     // 4. Filter + rank (keyword-based)
     let topPapers = selectTopPapers(allPapers, effectiveDisease, query, 20); // get 20 first
@@ -83,7 +91,7 @@ chatRoute.post('/message', async (req, res) => {
       topPapers = topPapers.slice(0, 8);
     }
 
-    let topTrials = selectTopTrials(rawTrials, effectiveDisease, intent, 6);
+    let topTrials = selectTopTrials(rawTrials, effectiveDisease, intent, 6, query);
 
     // Index papers in vector store for follow-up queries
     indexPapers(sessionId, topPapers).catch(() => {});
@@ -113,21 +121,20 @@ chatRoute.post('/message', async (req, res) => {
       });
     }
 
-    // 7. LLM reasoning — chat response (fast) + 4-stage chain (deep insights) in parallel
-    const [response, chainResult] = await Promise.all([
-      generateWithOllama(buildLLMPrompt({
-        name,
-        disease: effectiveDisease,
-        query,
-        location,
-        papers: topPapers,
-        trials: topTrials,
-        history,
-        counts,                          // Fix 1: sync header numbers
-        analyzedTrials: rawTrials.length // Fix 2: screened vs selected context
-      })),
-      runPromptChain(query, effectiveDisease, location, topPapers, topTrials, intent)
-    ]);
+    // 7. LLM reasoning — Chat response FIRST, then Deep Insights (Serialized for stability)
+    const response = await generateWithOllama(buildLLMPrompt({
+      name,
+      disease: effectiveDisease,
+      query,
+      location,
+      papers: topPapers,
+      trials: topTrials,
+      history: finalHistory,
+      counts,
+      analyzedTrials: rawTrials.length
+    }));
+
+    const chainResult = await runPromptChain(query, effectiveDisease, location, topPapers, rawTrials, intent);
 
     const insightsRaw = chainResult.finalOutput;
     const chainMeta = {
@@ -139,7 +146,7 @@ chatRoute.post('/message', async (req, res) => {
     // 8. Validate + parse
     const totalSources = topPapers.length + topTrials.length;
     const isValid = validateOutput(insightsRaw, topPapers);
-    const parsed = isValid ? parseInsights(insightsRaw, totalSources) : {
+    const parsed = isValid ? parseInsights(insightsRaw, totalSources, topPapers) : {
       keyInsights: ['Low confidence response. Please refine your query.'],
       conditionOverview: '', evidenceSynthesis: '', trialsConnection: '', criticalInsight: ''
     };
@@ -206,7 +213,7 @@ chatRoute.post('/message', async (req, res) => {
 
     // 10. Session save
     saveSession(sessionId, {
-      messages: [...history, { role: 'user', content: query }, { role: 'assistant', content: response }].slice(-20),
+      messages: [...finalHistory, { role: 'user', content: query }, { role: 'assistant', content: response }].slice(-20),
       currentDisease: effectiveDisease,
       currentQuery: query
     });
@@ -218,6 +225,13 @@ chatRoute.post('/message', async (req, res) => {
     ).catch(() => {});
 
     // Strip citations from main response text too
+    // 10. Session save
+    saveSession(sessionId, {
+      messages: [...finalHistory, { role: 'user', content: query }, { role: 'assistant', content: response }].slice(-20),
+      currentDisease: effectiveDisease,
+      currentQuery: query
+    });
+
     return res.json({
       response: stripCitations(response),
       insights,
@@ -226,6 +240,8 @@ chatRoute.post('/message', async (req, res) => {
       expandedQuery: expanded,
       confidence,
       counts,
+      trends: { detectedTrends, signals: detectedTrends.reduce((acc, t) => ({ ...acc, [t.trend]: t.score }), {}) },
+      limitationPaper: topPapers.find(p => (p.abstract || p.title).toLowerCase().match(/limit|gap|future research|small sample|bias|missing|unknown/)) || topPapers[0],
       followUps: generateFollowUps(effectiveDisease, query, topPapers, topTrials),
       meta: {
         totalFetched: allPapers.length,
@@ -280,7 +296,7 @@ function cleanHallucinatedCitations(text, sourceCount) {
   );
 }
 
-function parseInsights(raw, sourceCount = 8) {
+function parseInsights(raw, sourceCount = 8, papers = []) {
   if (!raw) return null;
   const clean = cleanHallucinatedCitations(
     raw.replace(/#{1,6}\s*/g, '').replace(/\*\*/g, '').replace(/\*/g, '').trim(),
@@ -306,6 +322,7 @@ function parseInsights(raw, sourceCount = 8) {
     }
     return [];
   };
+  console.log('🤖 Raw Insights Output:', clean.slice(0, 500));
   return {
     summary:               extract('SUMMARY'),
     confidenceScore:       extract('CONFIDENCE_SCORE'),
@@ -314,11 +331,17 @@ function parseInsights(raw, sourceCount = 8) {
     clinicalTrialInsights: extract('CLINICAL_TRIAL_INSIGHTS', 'TRIALS_CONNECTION'),
     emergingTreatments:    extract('EMERGING_TREATMENTS'),
     researchTrends:        extractList('RESEARCH_TRENDS'),
-    limitations:           extract('LIMITATIONS', 'CRITICAL_INSIGHT'),
+    limitations:           extract('LIMITATIONS', 'GAPS', 'CRITICAL_INSIGHT'),
     sources:               extract('SOURCES'),
     conditionOverview:     extract('CONDITION_OVERVIEW', 'SUMMARY'),
-    trialsConnection:      extract('TRIALS_CONNECTION', 'CLINICAL_TRIAL_INSIGHTS'),
-    criticalInsight:       extract('CRITICAL_INSIGHT', 'LIMITATIONS') || 'Limited long-term data available in provided sources.'
+    trialsConnection:      extract('TRIALS', 'TRIALS_CONNECTION', 'CLINICAL_TRIAL_INSIGHTS'),
+    criticalInsight:       (() => {
+      const g = extract('GAPS', 'CRITICAL_INSIGHT', 'LIMITATIONS', 'RESEARCH_GAPS');
+      if (g) return g;
+      const p = papers.find(p => (p.abstract||'').toLowerCase().includes('limit'));
+      if (p) return `Further research is needed to address limitations noted in "${p.title.slice(0, 50)}...", particularly concerning long-term evidence.`;
+      return 'Limited specific long-term clinical data available in the retrieved global research.';
+    })()
   };
 }
 

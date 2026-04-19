@@ -127,6 +127,12 @@ export function detectResearchTrends(papers, trials, query = '') {
     'test','tests','analysis','review','meta','systematic','randomized','controlled','cohort',
     'observational','prospective','retrospective','double','blind','placebo','vs','et','al']);
 
+  // Helper to find best paper for a trend
+  const findBestPaper = (trend) => {
+    const t = trend.toLowerCase();
+    return papers.find(p => `${p.title} ${p.abstract}`.toLowerCase().includes(t))?.url;
+  };
+
   // 1. Bi-gram extraction for professional labels
   const getBigrams = (text) => {
     const words = text.toLowerCase().split(/[\s\-\/,;:()]+/).filter(w => w.length > 3 && !stopWords.has(w));
@@ -144,7 +150,12 @@ export function detectResearchTrends(papers, trials, query = '') {
 
   const bigramSignals = Object.entries(bigramCounts)
     .filter(([, c]) => c >= 2)
-    .map(([b, c]) => ({ trend: b.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), score: c * 4, fromTitle: true }));
+    .map(([b, c]) => ({ 
+      trend: b.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), 
+      score: c * 4, 
+      fromTitle: true,
+      url: findBestPaper(b)
+    }));
 
   // 2. Known medical signals (Expanded Oncology + Immunology)
   const medicalSignals = [
@@ -156,7 +167,8 @@ export function detectResearchTrends(papers, trials, query = '') {
   const signalScores = medicalSignals
     .map(sig => ({ 
       trend: sig.charAt(0).toUpperCase() + sig.slice(1), 
-      score: (corpus.split(sig).length - 1) * 2 
+      score: (corpus.split(sig).length - 1) * 2,
+      url: findBestPaper(sig)
     }))
     .filter(t => t.score > 0);
 

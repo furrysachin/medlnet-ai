@@ -88,8 +88,11 @@ export function detectIntent(q = '') {
   if (/symptom|pain|fever|fatigue/.test(x)) return 'symptom';
   if (/cause|why|mutation|etiology/.test(x)) return 'cause';
   if (/prevent|risk/.test(x)) return 'prevention';
-  if (/diagnos|test|scan/.test(x)) return 'diagnosis';
-  if (/trial|study|research/.test(x)) return 'research';
+  if (/diagnos|test|scan|mammogram|biopsy|receptor/.test(x)) return 'diagnosis';
+  if (/trial|study|research|dataset|accuracy/.test(x)) return 'research';
+  if (/cost|price|ayushman|insurance|free|cheap/.test(x)) return 'practical';
+  if (/hospital|center|center|doctor|where/.test(x)) return 'hospital';
+  if (/screen|age|when/.test(x)) return 'screening';
 
   return 'general';
 }
@@ -291,10 +294,6 @@ export function scorePaper(p, disease = '', query = '', intent = 'general') {
   keywords.forEach(k => { if (text.includes(k)) score += 2; });
 
   // Drug boost
-  cfg.treatments.forEach(t => { if (text.includes(t)) score += 4; });
-
-  // India boost
-  if (text.includes('india') || text.includes('indian')) score += 3;
 
   // Evidence quality
   if (/randomized|rct/.test(text)) score += 8;
@@ -302,10 +301,16 @@ export function scorePaper(p, disease = '', query = '', intent = 'general') {
   if (/clinical trial/.test(text)) score += 5;
 
   // Recency
-  const year = parseInt(p.year) || 2000;
-  if (year >= 2023) score += 5;
+  const year = parseInt(p.year) || 0;
+  if (year >= 2024) score += 6;
   else if (year >= 2022) score += 3;
   else if (year >= 2020) score += 2;
+
+  // Global vs Local switch: Only boost India if the user explicitly asks about India
+  const isIndiaQuery = query.toLowerCase().includes('india') || query.toLowerCase().includes('indian');
+  if (isIndiaQuery && (text.includes('india') || text.includes('indian'))) {
+    score += 15; // High boost for local practical questions
+  }
 
   // Penalties
   if (/animal|mouse|in vitro/.test(text)) score -= 3;
@@ -338,7 +343,7 @@ export function selectTopPapers(papers, disease, query, topN = 8) {
 // =========================
 // 12. CLINICAL TRIAL RANKER (INDIA-FIRST)
 // =========================
-export function selectTopTrials(trials = [], disease = '', intent = 'general', topN = 6) {
+export function selectTopTrials(trials = [], disease = '', intent = 'general', topN = 6, query = '') {
   const STATUS_PRIORITY = { RECRUITING: 5, ACTIVE_NOT_RECRUITING: 4, COMPLETED: 3, ENROLLING_BY_INVITATION: 2, NOT_YET_RECRUITING: 1 };
   const cfg = getConfig(disease);
 
@@ -358,8 +363,19 @@ export function selectTopTrials(trials = [], disease = '', intent = 'general', t
     const locs = (t.locations||[]).map(l => `${l.city||''} ${l.country||''}`.toLowerCase()).join(' ');
 
     if (cfg.aliases.some(a => text.includes(a))) score += 50;
-    if (locs.includes('india')) score += 100;
-    else if (/asia|china|japan|korea|singapore|thailand/.test(locs)) score += 50;
+    
+    // Global location scoring - use user location if provided
+    const userLoc = (disease || '').toLowerCase(); // Fallback to disease name for context
+    if (locs.includes(userLoc)) score += 30;
+
+    // Dynamic India boost for trials
+    const isIndiaQuery = query.toLowerCase().includes('india') || query.toLowerCase().includes('indian');
+    if (isIndiaQuery && locs.includes('india')) {
+      score += 100;
+    } else if (locs.includes('india')) {
+      score += 5; // Low baseline boost for India-sourced evidence
+    }
+    
     if (/phase.*(3|iii|4|iv)/i.test(t.phase||'')) score += 20;
     score += (STATUS_PRIORITY[t.status] || 0) * 5;
     return score;
@@ -375,8 +391,14 @@ export function selectTopTrials(trials = [], disease = '', intent = 'general', t
 // 13. CONTEXT BUILDER
 // =========================
 export function buildContext(history = [], query = '', disease = '') {
-  const last = history.slice(-3).map(h => h.query || h.content || '').filter(Boolean).join(' ');
-  const isShort = query.split(' ').length <= 5;
+  const q = query.toLowerCase();
+  const isNewTopic = /(lung cancer|diabetes|heart|stroke|alzheimer|parkinson|cancer|asthma|arthritis|kidney|liver|tuberculosis|covid|hiv)/.test(q);
+  
+  // If it's a new medical topic or a fresh query, don't use history for the search context
+  if (isNewTopic || history.length === 0) return query;
+
+  const last = history.slice(-2).map(h => h.query || h.content || '').filter(Boolean).join(' ');
+  const isShort = query.split(' ').length <= 4;
   const merged = (isShort && disease) ? `${disease} ${query}` : query;
   return last ? `${last} ${merged}` : merged;
 }

@@ -167,13 +167,25 @@ trendRoute.post('/trends', async (req, res) => {
     const parsed = parseTrends(raw);
 
     // Merge LLM trends + highly-cited Semantic Scholar papers
-    const llmTrends = parsed?.trends?.length
+    const llmTrends = (parsed?.trends?.length
       ? parsed.trends
       : detectedTrends.slice(0, 5).map(t => ({
           name: t.trend.charAt(0).toUpperCase() + t.trend.slice(1),
           evidence: `Detected ${t.score} times in retrieved ${disease} literature`,
           why: 'Recurring signal across PubMed, OpenAlex, and Semantic Scholar',
-        }));
+          url: t.url // Include detected URL in fallback
+        }))
+    ).map(t => {
+      // Try to find a URL for LLM trends from our detected signals
+      if (!t.url) {
+        const signal = detectedTrends.find(s => 
+          t.name.toLowerCase().includes(s.trend.toLowerCase()) || 
+          s.trend.toLowerCase().includes(t.name.toLowerCase())
+        );
+        if (signal) t.url = signal.url;
+      }
+      return t;
+    });
 
     const allTrends = [
       ...llmTrends,

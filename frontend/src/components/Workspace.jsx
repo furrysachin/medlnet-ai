@@ -276,7 +276,13 @@ function ResearchOutput({ result, mode, onQuery }) {
       {/* Critical insight */}
       {critical && mode === 'research' && (
         <SectionCard icon={HelpCircle} title="Research Gaps & Limitations" accentColor="#DC2626" collapsible>
-          <p className="text-sm text-gray-700 leading-relaxed">{critical}</p>
+          <p className="text-sm text-gray-700 leading-relaxed mb-2">{critical}</p>
+          {result.limitationPaper && (
+            <a href={result.limitationPaper.url} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium">
+              <FileText size={12} /> View paper on research gaps
+            </a>
+          )}
         </SectionCard>
       )}
 

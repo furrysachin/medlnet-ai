@@ -44,11 +44,16 @@ export default function App() {
     const diseaseMap = {
       'lung cancer': 'Lung Cancer', 'diabetes': 'Diabetes', 'alzheimer': "Alzheimer's Disease",
       'heart disease': 'Heart Disease', 'hypertension': 'Hypertension', 'tuberculosis': 'Tuberculosis',
-      'breast cancer': 'Breast Cancer', 'covid': 'COVID-19', 'cancer': 'Cancer'
+      'breast cancer': 'Breast Cancer', 'covid': 'COVID-19', 'cancer': 'Cancer',
+      'stroke': 'Stroke', 'parkinson': 'Parkinson', 'asthma': 'Asthma', 'arthritis': 'Arthritis'
     };
     const q = query.toLowerCase();
     const detectedDisease = Object.entries(diseaseMap).find(([k]) => q.includes(k))?.[1];
-    if (detectedDisease && !context.disease) setContext(prev => ({ ...prev, disease: detectedDisease }));
+    
+    // Always update if detected new disease
+    if (detectedDisease && detectedDisease !== context.disease) {
+      setContext(prev => ({ ...prev, disease: detectedDisease }));
+    }
 
     // Auto-detect active tab
     const detectedTab = /researcher|author|scientist/.test(q) ? 'researchers'
