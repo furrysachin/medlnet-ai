@@ -571,6 +571,10 @@ function InputBar({ onQuery, isLoading, context }) {
         </div>
         {isLoading && <p className="text-center text-xs text-gray-400 mt-2">Analyzing research papers…</p>}
         {listening && <p className="text-center text-xs text-red-400 mt-2 animate-pulse">🎤 Listening… speak now</p>}
+        <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
+          <Shield size={10} className="text-gray-400" />
+          DISCLAIMER: This is an AI research tool, not medical advice. Always consult a healthcare professional.
+        </p>
       </div>
     </div>
   );

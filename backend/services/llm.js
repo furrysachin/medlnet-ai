@@ -1,13 +1,11 @@
-import { HfInference } from "@huggingface/inference";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import axios from "axios";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const hf = new HfInference(process.env.HF_API_KEY);
-const HF_MODEL = process.env.HF_MODEL || "mistralai/Mistral-7B-Instruct-v0.3";
-const OLLAMA_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "mistral";
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const GEMINI_MODEL = "gemini-2.0-flash";
 
 const MASTER_SYSTEM = `You are CURALINK, an advanced Medical Research AI.
 - Detect the user's language (Hindi, English, or Hinglish) and reply in the SAME language.
@@ -16,51 +14,35 @@ const MASTER_SYSTEM = `You are CURALINK, an advanced Medical Research AI.
 - Cite sources as [1], [2] using the provided paper list.
 - If data is limited, say so clearly.`;
 
-export async function generate(prompt, systemPrompt = MASTER_SYSTEM) {
-  // Try Ollama first
+export async function generate(prompt, systemPrompt = MASTER_SYSTEM, retries = 3) {
   try {
-    console.log(`🤖 Calling Ollama (${OLLAMA_URL}) with model ${OLLAMA_MODEL}...`);
-    const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
-      model: OLLAMA_MODEL,
-      prompt: `${systemPrompt}\n\n${prompt}`,
-      stream: false,
-      options: { temperature: 0.1 }
-    }, { timeout: 90000 }); // Increased timeout to 90s for heavy global analysis
-    return response.data.response;
-  } catch (err) {
-    console.error("❌ Ollama Error:", err.message);
-    if (err.code === 'ECONNREFUSED') console.error("   Check if Ollama is running (ollama serve).");
-    if (err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED') console.error("   Ollama request timed out.");
-    
-    // Fallback to HuggingFace
-    try {
-      if (!process.env.HF_API_KEY) {
-         console.warn("⚠️ No HF_API_KEY found, cannot fallback.");
-         return "Error: AI engine (Ollama/HF) unavailable. Please check backend setup.";
-      }
-      console.log(`☁️ Falling back to HuggingFace (${HF_MODEL})...`);
-      const response = await hf.chatCompletion({
-        model: HF_MODEL,
-        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }],
-        max_tokens: 1000, temperature: 0.1
-      });
-      return response.choices[0].message.content;
-    } catch (hfErr) {
-      console.error("❌ HF Error:", hfErr.message);
-      return "Medical analysis engine unavailable. Please ensure Ollama is running or add HF_API_KEY.";
+    console.log(`🤖 Calling Gemini (${GEMINI_MODEL})...`);
+    if (!process.env.GEMINI_API_KEY) {
+      console.warn("⚠️ No GEMINI_API_KEY found.");
+      return "Error: Gemini API key is missing. Please add GEMINI_API_KEY to your .env file.";
     }
+    
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+    const fullPrompt = `${systemPrompt}\n\n${prompt}`;
+
+    const result = await model.generateContent(fullPrompt);
+    const response = await result.response;
+    return response.text();
+  } catch (err) {
+    if (err.message.includes("429") && retries > 0) {
+      console.log(`⏱️ Rate limit hit (429), waiting 10s and retrying... (${retries} retries left)`);
+      await new Promise(r => setTimeout(r, 10000));
+      return generate(prompt, systemPrompt, retries - 1);
+    }
+    console.error("❌ Gemini Error:", err.message);
+    return "Medical analysis engine unavailable. Please check backend setup and Gemini API key.";
   }
 }
 
 export const generateWithOllama = (prompt) => generate(prompt);
 
 export const checkOllamaHealth = async () => {
-  try {
-    const res = await axios.get(`${OLLAMA_URL}/api/tags`);
-    return { available: true, engine: "Ollama", models: res.data.models.map(m => m.name) };
-  } catch {
-    return { available: !!process.env.HF_API_KEY, engine: "HuggingFace (Fallback)" };
-  }
+  return { available: !!process.env.GEMINI_API_KEY, engine: "Gemini API" };
 };
 
 export const isMedicalQuery = (q) => {
